@@ -307,16 +307,23 @@ impl LsmStorageInner {
 
     /// Put a key-value pair into the storage by writing into the current memtable.
     pub fn put(&self, _key: &[u8], _value: &[u8]) -> Result<()> {
+        // let outer_arc = self.state.clone();
+        // let mut rwlock = outer_arc.write();
+        // let inner_arc = Arc::get_mut(&mut rwlock);
+        // let storage = inner_arc.ok_or_else(|| anyhow::anyhow!("Inner arc"))?;
+        // let memtable = &storage.memtable;
+
         let outer_arc = self.state.clone();
-        let mut rwlock = outer_arc.write();
-        let inner_arc = Arc::get_mut(&mut rwlock);
-        let storage = inner_arc.ok_or_else(|| anyhow::anyhow!("Inner arc"))?;
+        let rwlock = outer_arc.read();
+        let inner_arc = rwlock.clone();
+        let storage = &*inner_arc;
         let memtable = &storage.memtable;
         memtable.put(_key, _value)?;
 
         if memtable.approximate_size() >= self.options.target_sst_size {
             let state_lock = self.state_lock.lock();
             if memtable.approximate_size() >= self.options.target_sst_size {
+                drop(inner_arc);
                 drop(rwlock);
                 self.force_freeze_memtable(&state_lock)?;
             }
@@ -326,16 +333,23 @@ impl LsmStorageInner {
 
     /// Remove a key from the storage by writing an empty value.
     pub fn delete(&self, _key: &[u8]) -> Result<()> {
+        // let outer_arc = self.state.clone();
+        // let mut rwlock = outer_arc.write();
+        // let inner_arc = Arc::get_mut(&mut rwlock);
+        // let storage = inner_arc.ok_or_else(|| anyhow::anyhow!("Inner arc"))?;
+        // let memtable = &storage.memtable;
+
         let outer_arc = self.state.clone();
-        let mut rwlock = outer_arc.write();
-        let inner_arc = Arc::get_mut(&mut rwlock);
-        let storage = inner_arc.ok_or_else(|| anyhow::anyhow!("Inner arc"))?;
+        let rwlock = outer_arc.read();
+        let inner_arc = rwlock.clone();
+        let storage = &*inner_arc;
         let memtable = &storage.memtable;
         memtable.put(_key, b"")?;
 
         if memtable.approximate_size() >= self.options.target_sst_size {
             let state_lock = self.state_lock.lock();
             if memtable.approximate_size() >= self.options.target_sst_size {
+                drop(inner_arc);
                 drop(rwlock);
                 self.force_freeze_memtable(&state_lock)?;
             }
