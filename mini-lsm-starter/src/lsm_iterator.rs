@@ -46,7 +46,16 @@ impl StorageIterator for LsmIterator {
     }
 
     fn next(&mut self) -> Result<()> {
-        self.inner.next()
+        loop {
+            self.inner.next()?;
+            if !self.value().is_empty() {
+                break;
+            }
+            if !self.is_valid() {
+                break;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -75,10 +84,12 @@ impl<I: StorageIterator> StorageIterator for FusedIterator<I> {
     }
 
     fn key(&self) -> Self::KeyType<'_> {
+        assert!(self.is_valid());
         self.iter.key()
     }
 
     fn value(&self) -> &[u8] {
+        assert!(self.is_valid());
         self.iter.value()
     }
 
