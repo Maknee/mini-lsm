@@ -95,8 +95,6 @@ where
 {
     for (k, v) in expected {
         assert!(iter.is_valid());
-        let kk = std::str::from_utf8(iter.key().for_testing_key_ref()).unwrap();
-        println!("GOT {k:#?} {v:#?} {kk:#?}");
         assert_eq!(
             k,
             iter.key().for_testing_key_ref(),
