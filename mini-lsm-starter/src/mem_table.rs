@@ -116,7 +116,7 @@ impl MemTable {
         let mut memtable = MemTableIteratorBuilder {
             map: self.map.clone(),
             iter_builder: |map: &Arc<SkipMap<Bytes, Bytes>>| map.range(bound),
-            item: item,
+            item,
         }
         .build();
         memtable.next().expect("Can go next");

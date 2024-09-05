@@ -38,9 +38,6 @@ impl Block {
             .map(|mut x| x.get_u16())
             .collect();
 
-        Self {
-            data: kv,
-            offsets: offsets,
-        }
+        Self { data: kv, offsets }
     }
 }

@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use crate::key::{KeySlice, KeyVec};
-use bytes::{Buf, BufMut, Bytes};
+use bytes::Buf;
 
 use super::{Block, LEN_SIZE};
 
@@ -55,8 +55,7 @@ impl BlockIterator {
     /// Returns the value of the current entry.
     pub fn value(&self) -> &[u8] {
         let data = &self.block.data;
-        let value_ref = &data[self.value_range.0..self.value_range.1];
-        value_ref
+        &data[self.value_range.0..self.value_range.1]
     }
 
     /// Returns true if the iterator is valid.

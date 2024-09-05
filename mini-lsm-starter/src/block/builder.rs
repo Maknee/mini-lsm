@@ -24,7 +24,7 @@ impl BlockBuilder {
         Self {
             offsets: vec![],
             data: Vec::with_capacity(block_size),
-            block_size: block_size,
+            block_size,
             first_key: KeyVec::new(),
         }
     }
@@ -37,11 +37,7 @@ impl BlockBuilder {
         let value_len = value.len();
         let total_size = LEN_SIZE * 2 + key_len + value_len + LEN_SIZE;
         if offset + total_size > self.block_size {
-            if offset == 0 {
-                return true;
-            } else {
-                return false;
-            }
+            return offset == 0;
         }
 
         // key length

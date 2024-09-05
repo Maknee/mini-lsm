@@ -56,7 +56,7 @@ impl<I: StorageIterator> MergeIterator<I> {
         let current = if !heap.is_empty() { heap.pop() } else { None };
         Self {
             iters: heap,
-            current: current,
+            current,
         }
     }
 }
