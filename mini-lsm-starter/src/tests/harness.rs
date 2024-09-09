@@ -95,6 +95,8 @@ where
 {
     for (k, v) in expected {
         assert!(iter.is_valid());
+        let key = iter.key().for_testing_key_ref();
+        println!("KEY {k:#?} {key:#?}");
         assert_eq!(
             k,
             iter.key().for_testing_key_ref(),
@@ -102,6 +104,7 @@ where
             k,
             as_bytes(iter.key().for_testing_key_ref()),
         );
+        println!("CHECK2");
         assert_eq!(
             v,
             iter.value(),
@@ -109,7 +112,9 @@ where
             v,
             as_bytes(iter.value()),
         );
+        println!("CHECK3");
         iter.next().unwrap();
+        println!("CHECK4");
     }
     assert!(!iter.is_valid());
 }
@@ -158,6 +163,7 @@ where
             k,
             as_bytes(iter.key()),
         );
+        println!(" actual key: {:?}", as_bytes(iter.key()));
         assert_eq!(
             v,
             iter.value(),
@@ -167,6 +173,7 @@ where
         );
         iter.next().unwrap();
     }
+    // println!(" actual key: {:?}", as_bytes(iter.key()));
     assert!(!iter.is_valid());
 }
 

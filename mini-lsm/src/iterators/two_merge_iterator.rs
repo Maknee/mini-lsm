@@ -34,9 +34,9 @@ impl<
 
     pub fn create(a: A, b: B) -> Result<Self> {
         let mut iter = Self {
-            choose_a: false,
             a,
             b,
+            choose_a: false,
         };
         iter.skip_b()?;
         iter.choose_a = Self::choose_a(&iter.a, &iter.b);

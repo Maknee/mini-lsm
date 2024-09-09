@@ -27,7 +27,7 @@ What is the time complexity of seeking a key in the SST?
 - O(n) entry for each entry in the block. For each entry of the index in the sst, you have to iterate through the index to find the correcct block.
 
 Where does the cursor stop when you seek a non-existent key in your implementation?
-- It starts at the beginnning of the SST/first block again.
+- It goes to the key that's bigger than the searched key.
 
 Is it possible (or necessary) to do in-place updates of SST files?
 - No, the index and the block needs to be updated separately. It needs to be written in one go, son you need a lock.

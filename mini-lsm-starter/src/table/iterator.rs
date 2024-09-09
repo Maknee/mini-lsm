@@ -85,7 +85,7 @@ impl StorageIterator for SsTableIterator {
         if !self.blk_iter.is_valid() {
             self.blk_idx += 1;
             if self.blk_idx >= self.table.block_meta.len() {
-                self.blk_idx = 0;
+                return Ok(());
             }
             let block = self.table.read_block_cached(self.blk_idx)?;
             self.blk_iter = BlockIterator::create_and_seek_to_first(block);
