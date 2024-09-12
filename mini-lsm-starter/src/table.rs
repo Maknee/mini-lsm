@@ -202,7 +202,6 @@ impl SsTable {
         let mut data = vec![0; len];
         f.seek(SeekFrom::Start(offset.try_into()?))?;
         f.read_exact(&mut data)?;
-        println!("BLOCK {block_idx:#?} {offset:#?} {len:#?}");
         let block = Block::decode(&data);
         Ok(Arc::new(block))
     }

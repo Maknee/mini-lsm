@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::ops::Bound;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -23,7 +23,7 @@ use crate::lsm_iterator::{FusedIterator, LsmIterator};
 use crate::manifest::Manifest;
 use crate::mem_table::{map_bound, MemTable};
 use crate::mvcc::LsmMvccInner;
-use crate::table::{SsTable, SsTableIterator};
+use crate::table::{SsTable, SsTableBuilder, SsTableIterator};
 
 pub type BlockCache = moka::sync::Cache<(usize, usize), Arc<Block>>;
 
@@ -158,7 +158,9 @@ impl Drop for MiniLsm {
 
 impl MiniLsm {
     pub fn close(&self) -> Result<()> {
-        unimplemented!()
+        self.compaction_notifier.send(())?;
+        self.flush_notifier.send(())?;
+        Ok(())
     }
 
     /// Start the storage engine by either loading an existing directory or creating a new one if the directory does
@@ -268,6 +270,7 @@ impl LsmStorageInner {
             mvcc: None,
             compaction_filters: Arc::new(Mutex::new(Vec::new())),
         };
+        std::fs::create_dir_all(path)?;
 
         Ok(storage)
     }
@@ -352,8 +355,8 @@ impl LsmStorageInner {
         let outer_arc = self.state.clone();
         let rwlock = outer_arc.read();
         let inner_arc = rwlock.clone();
-        let storage = &*inner_arc;
-        let memtable = &storage.memtable;
+        let state = &*inner_arc;
+        let memtable = &state.memtable;
         memtable.put(_key, _value)?;
 
         if memtable.approximate_size() >= self.options.target_sst_size {
@@ -364,6 +367,7 @@ impl LsmStorageInner {
                 self.force_freeze_memtable(&state_lock)?;
             }
         }
+
         Ok(())
     }
 
@@ -378,8 +382,8 @@ impl LsmStorageInner {
         let outer_arc = self.state.clone();
         let rwlock = outer_arc.read();
         let inner_arc = rwlock.clone();
-        let storage = &*inner_arc;
-        let memtable = &storage.memtable;
+        let state = &*inner_arc;
+        let memtable = &state.memtable;
         memtable.put(_key, b"")?;
 
         if memtable.approximate_size() >= self.options.target_sst_size {
@@ -430,7 +434,38 @@ impl LsmStorageInner {
 
     /// Force flush the earliest-created immutable memtable to disk
     pub fn force_flush_next_imm_memtable(&self) -> Result<()> {
-        unimplemented!()
+        let _state_lock = self.state_lock.lock();
+        let imm_memtable = {
+            let state = self.state.read();
+            state
+                .imm_memtables
+                .last()
+                .ok_or_else(|| anyhow::anyhow!("No last imm table"))?
+                .clone()
+        };
+        let mut sstable_builder = SsTableBuilder::new(self.options.block_size);
+        imm_memtable.flush(&mut sstable_builder)?;
+
+        let sst_id = self.next_sst_id();
+        let sstable = sstable_builder.build(
+            sst_id,
+            Some(self.block_cache.clone()),
+            self.path_of_sst(sst_id),
+        )?;
+
+        {
+            let mut rwlock = self.state.write();
+            let inner_arc = Arc::get_mut(&mut rwlock);
+            let state = inner_arc.ok_or_else(|| anyhow::anyhow!("Inner arc"))?;
+            state
+                .imm_memtables
+                .pop()
+                .ok_or_else(|| anyhow::anyhow!("No last imm table"))?;
+            state.l0_sstables.insert(0, sst_id);
+            state.sstables.insert(sst_id, Arc::new(sstable));
+        }
+
+        Ok(())
     }
 
     pub fn new_txn(&self) -> Result<()> {
