@@ -107,6 +107,13 @@ impl FileObject {
         let size = file.metadata()?.len();
         Ok(FileObject(Some(file), size))
     }
+
+    pub fn read_raw_block(&self, offset: u64) -> Result<Vec<u8>> {
+        let offset_raw = self.read(offset as u64, (std::mem::size_of::<u32>() * 2) as u64)?;
+        let data_len = (&offset_raw[..]).get_u32() as u64;
+        let data_off = (&offset_raw[std::mem::size_of::<u32>()..]).get_u32() as u64;
+        Ok(self.read(data_off, data_len)?)
+    }
 }
 
 /// An SSTable.
@@ -136,14 +143,19 @@ impl SsTable {
     pub fn open(id: usize, block_cache: Option<Arc<BlockCache>>, file: FileObject) -> Result<Self> {
         let size = file.size();
         let block_meta_offset_raw = file.read(
-            size - std::mem::size_of::<u32>() as u64,
+            size - (std::mem::size_of::<u32>() * 3) as u64,
             std::mem::size_of::<u32>() as u64,
         )?;
         let block_meta_offset = (&block_meta_offset_raw[..]).get_u32() as u64;
-        let data = file.read(block_meta_offset, size - block_meta_offset)?;
+        // let data = file.read(block_meta_offset, size - block_meta_offset)?;
+        let metadata_block_offset = size - (std::mem::size_of::<u32>() * 4) as u64;
+        let metadata_block = file.read_raw_block(metadata_block_offset)?;
+
+        let bloom_block_offset = size - (std::mem::size_of::<u32>() * 2) as u64;
+        let bloom_block = file.read_raw_block(bloom_block_offset)?;
 
         // Decode
-        let block_meta = BlockMeta::decode_block_meta(&data[..]);
+        let block_meta = BlockMeta::decode_block_meta(&metadata_block[..]);
 
         let first_key = if let Some(x) = block_meta.first() {
             x.first_key.clone()
@@ -156,6 +168,9 @@ impl SsTable {
             return Err(anyhow::anyhow!("No last key"));
         };
 
+        // Decode bloom
+        let bloom = Bloom::decode(&bloom_block)?;
+
         Ok(Self {
             file,
             block_meta,
@@ -164,7 +179,7 @@ impl SsTable {
             block_cache,
             first_key,
             last_key,
-            bloom: None,
+            bloom: Some(bloom),
             max_ts: 0,
         })
     }
@@ -222,7 +237,19 @@ impl SsTable {
     /// You may also assume the key-value pairs stored in each consecutive block are sorted.
     pub fn find_block_idx(&self, key: KeySlice) -> usize {
         for (i, metadata) in self.block_meta.iter().enumerate() {
-            if metadata.first_key.as_key_slice() >= key {
+            if key >= metadata.first_key.as_key_slice() {
+                if key > metadata.last_key.as_key_slice() {
+                    continue;
+                }
+                return i;
+                // if i != self.block_meta.len() - 1 {
+                //     let next_block_meta = self.block_meta[i + 1];
+                //     if key <= next_block_meta.first_key.as_key_slice() {
+                //         return i;
+                //     }
+                // }
+                // assert!(key <= metadata.last_key.as_key_slice());
+            } else {
                 return i;
             }
         }

@@ -29,29 +29,48 @@ impl BlockBuilder {
         }
     }
 
+    fn estimated_size(&self) -> usize {
+        LEN_SIZE + (self.offsets.len() * LEN_SIZE) + self.data.len()
+    }
+
     /// Adds a key-value pair to the block. Returns false when the block is full.
     #[must_use]
     pub fn add(&mut self, key: KeySlice, value: &[u8]) -> bool {
         let offset = self.data.len();
         let key_len = key.raw_ref().len();
         let value_len = value.len();
-        let total_size = LEN_SIZE * 2 + key_len + value_len + LEN_SIZE;
-        if offset + total_size > self.block_size {
-            return offset == 0;
+        let total_size = self.estimated_size() + key_len + value_len + LEN_SIZE * 3;
+        if total_size > self.block_size && !self.is_empty() {
+            return false;
+        }
+        let mut key_overlap_len = 0;
+        for (x, y) in self.first_key.raw_ref().iter().zip(key.raw_ref()) {
+            if x == y {
+                key_overlap_len += 1;
+            } else {
+                break;
+            }
         }
 
+        let rest_key = &key.raw_ref()[key_overlap_len..];
+        let rest_key_len = rest_key.len();
+
         // key length
-        self.data.put_u16(key_len as u16);
+        self.data.put_u16(key_overlap_len as u16);
+        self.data.put_u16(rest_key_len as u16);
 
         // value length
         self.data.put_u16(value_len as u16);
 
         // key bytes
-
-        self.data.put(key.raw_ref());
+        self.data.put(rest_key);
         self.data.put(value);
 
         self.offsets.push(offset.try_into().unwrap());
+
+        if self.first_key.is_empty() {
+            self.first_key = key.to_key_vec();
+        }
 
         true
     }
